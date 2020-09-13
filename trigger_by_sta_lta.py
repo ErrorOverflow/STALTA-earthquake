@@ -1,22 +1,13 @@
 #!/usr/bin/env python
 import argparse
 import pandas as pd
-import glob
 import os
-import string
-import re
 import csv
 import math
 import shutil
-import matplotlib
-# matplotlib.use('Agg')
-# import matplotlib.pyplot as plt
 import obspy
 import fnmatch
-from obspy.core import Stream, read, UTCDateTime
-from obspy.clients.arclink import Client
-from obspy.signal.trigger import recursive_sta_lta, classic_sta_lta, trigger_onset, ar_pick
-# matplotlib.pyplot.ioff()
+
 # headers = ['station name', 'phase arrival time' , 'phase type']
 # client = Client(host="http://10.2.14.222/catalog", port=22,
 #        user="z@obspy.de")
@@ -30,10 +21,10 @@ def preprocess_stream(stream):
 
 
 def main(args):
-    st1 = Stream()
-    st2 = Stream()
-    st3 = Stream()
-    threechannels = Stream()
+    st1 = obspy.core.Stream()
+    # st2 = obspy.core.Stream() #可能是三分量
+    # st3 = obspy.core.Stream()
+    threechannels = obspy.core.Stream()
     times_csv = {"start_time": [],
                  "end_time": [],
                  "utc_start_timestamp": [],
@@ -43,12 +34,12 @@ def main(args):
 
     stream_files = [file for file in os.listdir(stream_path) if
                     fnmatch.fnmatch(file, 'XX.MXI.2008207000000.mseed')]
-# for file in glob.glob('/media/zm/Elements/after/BHZ/*.BHZ'):
+
     for file in stream_files:
         stream_path1 = os.path.join(stream_path, file)
         print("+ Loading Stream {}".format(file))
-        #    st = read("./*Z.sac")
-        st1 = read(stream_path1)
+
+        st1 = obspy.core.read(stream_path1)
         st1 = preprocess_stream(st1)
         tr1 = st1[0]
         tr2 = st1[1]
@@ -57,9 +48,9 @@ def main(args):
         msg = "%s %s %s" % (tr1.stats.station, str(
             tr1.stats.starttime), str(tr1.stats.endtime))
         print(msg)
-        #    print(tr1.stats)
-        delta1 = UTCDateTime(tr1.stats.starttime)
-        delta2 = UTCDateTime(tr1.stats.endtime)
+
+        delta1 = obspy.core.UTCDateTime(tr1.stats.starttime)
+        delta2 = obspy.core.UTCDateTime(tr1.stats.endtime)
         t1 = math.ceil(delta1.timestamp)
         t2 = delta2.timestamp
         print(t1, t2)
@@ -73,7 +64,7 @@ def main(args):
             st1.slice(tr1.stats.starttime, tr1.stats.starttime +
                       args.window_size).write(output_mseed, format="mseed")
         for t3 in range(int(t1), int(t2), args.window_step):
-            t = UTCDateTime(t3)
+            t = obspy.core.UTCDateTime(t3)
             #print("Cut a slice at time:",t,tr1.stats.station,tr1.stats.sac.stlo, tr1.stats.sac.stla,str(file))
             lsplit3 = '{:0>2s}'.format(str(t.hour))
             lsplit4 = '{:0>2s}'.format(str(t.minute))
@@ -87,19 +78,22 @@ def main(args):
             st3_ = tr3.slice(t, t4)
             df = st1_.stats.sampling_rate
             # Characteristic function and trigger onsets
-            #cft = recursive_sta_lta(st1_.data, int(2 * df), int(20. * df))
+            #cft = obspy.signal.trigger.recursive_sta_lta(st1_.data, int(2 * df), int(20. * df))
             try:
-                cft = classic_sta_lta(st1_.data, int(0.5 * df), int(60. * df))
-            #cft1 = recursive_sta_lta(st2_.data, int(2 * df), int(20. * df))
-                cft1 = classic_sta_lta(st2_.data, int(0.5 * df), int(60. * df))
-            #cft2 = recursive_sta_lta(st3_.data, int(2 * df), int(20. * df))
-                cft2 = classic_sta_lta(st3_.data, int(0.5 * df), int(60. * df))
+                cft = obspy.signal.trigger.classic_sta_lta(
+                    st1_.data, int(0.5 * df), int(60. * df))
+            #cft1 = obspy.signal.trigger.recursive_sta_lta(st2_.data, int(2 * df), int(20. * df))
+                cft1 = obspy.signal.trigger.classic_sta_lta(
+                    st2_.data, int(0.5 * df), int(60. * df))
+            #cft2 = obspy.signal.trigger.recursive_sta_lta(st3_.data, int(2 * df), int(20. * df))
+                cft2 = obspy.signal.trigger.classic_sta_lta(
+                    st3_.data, int(0.5 * df), int(60. * df))
             except:
                 continue
-            #cft = classic_sta_lta(st_.data, int(2.5 * df), int(10. * df))
-            on_of = trigger_onset(cft, 5, 1.2)
-            on_of1 = trigger_onset(cft1, 5, 1.2)
-            on_of2 = trigger_onset(cft2, 5, 1.2)
+            #cft = obspy.signal.trigger.classic_sta_lta(st_.data, int(2.5 * df), int(10. * df))
+            on_of = obspy.signal.trigger.trigger_onset(cft, 5, 1.2)
+            on_of1 = obspy.signal.trigger.trigger_onset(cft1, 5, 1.2)
+            on_of2 = obspy.signal.trigger.trigger_onset(cft2, 5, 1.2)
             if len(on_of) or len(on_of1) or len(on_of2):
                 print(t, t4, tr1.stats.station)
                 print(on_of, on_of1, on_of2)
@@ -140,7 +134,6 @@ def main(args):
                 maxon = int(maxon_of/100)
                 print(minon_of, maxon_of)
                 if args.save_mseed:
-
                     mseed_dir = os.path.join(args.output, "mseed")
                     output_mseed = os.path.join(mseed_dir, mseed_files)
                     threechannels.slice(
@@ -160,10 +153,6 @@ def main(args):
     df.to_csv(output_catalog)
 
 
-#
-#    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-#    writer.writeheader()
-#    writer.writerow({k: str(v) for k, v in mdict.items()} )
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--stream_path", type=str, default="./data",
