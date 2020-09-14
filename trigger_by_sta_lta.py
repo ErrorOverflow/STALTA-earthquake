@@ -1,17 +1,14 @@
-#!/usr/bin/env python
 import argparse
 import pandas as pd
+import glob
 import os
-import csv
 import math
 import shutil
 import obspy
 import fnmatch
-
-# headers = ['station name', 'phase arrival time' , 'phase type']
-# client = Client(host="http://10.2.14.222/catalog", port=22,
-#        user="z@obspy.de")
-# mdict={}
+from obspy.core import Stream, read, UTCDateTime
+from obspy.clients.arclink import Client
+from obspy.signal.trigger import recursive_sta_lta, classic_sta_lta, trigger_onset, ar_pick
 
 
 def preprocess_stream(stream):
@@ -21,25 +18,16 @@ def preprocess_stream(stream):
 
 
 def main(args):
-    st1 = obspy.core.Stream()
-    # st2 = obspy.core.Stream() #可能是三分量
-    # st3 = obspy.core.Stream()
-    threechannels = obspy.core.Stream()
-    times_csv = {"start_time": [],
-                 "end_time": [],
-                 "utc_start_timestamp": [],
-                 "utc_end_timestamp": [],
-                 "stname": []}
+    times_csv = {"start_time": [], "end_time": [],
+                 "utc_start_timestamp": [], "utc_end_timestamp": [], "stname": []}
     stream_path = args.stream_path
-
     stream_files = [file for file in os.listdir(stream_path) if
                     fnmatch.fnmatch(file, 'XX.MXI.2008207000000.mseed')]
 
     for file in stream_files:
         stream_path1 = os.path.join(stream_path, file)
         print("+ Loading Stream {}".format(file))
-
-        st1 = obspy.core.read(stream_path1)
+        st1 = read(stream_path1)
         st1 = preprocess_stream(st1)
         tr1 = st1[0]
         tr2 = st1[1]
@@ -48,9 +36,8 @@ def main(args):
         msg = "%s %s %s" % (tr1.stats.station, str(
             tr1.stats.starttime), str(tr1.stats.endtime))
         print(msg)
-
-        delta1 = obspy.core.UTCDateTime(tr1.stats.starttime)
-        delta2 = obspy.core.UTCDateTime(tr1.stats.endtime)
+        delta1 = UTCDateTime(tr1.stats.starttime)
+        delta2 = UTCDateTime(tr1.stats.endtime)
         t1 = math.ceil(delta1.timestamp)
         t2 = delta2.timestamp
         print(t1, t2)
@@ -64,7 +51,7 @@ def main(args):
             st1.slice(tr1.stats.starttime, tr1.stats.starttime +
                       args.window_size).write(output_mseed, format="mseed")
         for t3 in range(int(t1), int(t2), args.window_step):
-            t = obspy.core.UTCDateTime(t3)
+            t = UTCDateTime(t3)
             #print("Cut a slice at time:",t,tr1.stats.station,tr1.stats.sac.stlo, tr1.stats.sac.stla,str(file))
             lsplit3 = '{:0>2s}'.format(str(t.hour))
             lsplit4 = '{:0>2s}'.format(str(t.minute))
@@ -78,22 +65,19 @@ def main(args):
             st3_ = tr3.slice(t, t4)
             df = st1_.stats.sampling_rate
             # Characteristic function and trigger onsets
-            #cft = obspy.signal.trigger.recursive_sta_lta(st1_.data, int(2 * df), int(20. * df))
+            #cft = recursive_sta_lta(st1_.data, int(2 * df), int(20. * df))
             try:
-                cft = obspy.signal.trigger.classic_sta_lta(
-                    st1_.data, int(0.5 * df), int(60. * df))
-            #cft1 = obspy.signal.trigger.recursive_sta_lta(st2_.data, int(2 * df), int(20. * df))
-                cft1 = obspy.signal.trigger.classic_sta_lta(
-                    st2_.data, int(0.5 * df), int(60. * df))
-            #cft2 = obspy.signal.trigger.recursive_sta_lta(st3_.data, int(2 * df), int(20. * df))
-                cft2 = obspy.signal.trigger.classic_sta_lta(
-                    st3_.data, int(0.5 * df), int(60. * df))
+                cft = classic_sta_lta(st1_.data, int(0.5 * df), int(60. * df))
+            #cft1 = recursive_sta_lta(st2_.data, int(2 * df), int(20. * df))
+                cft1 = classic_sta_lta(st2_.data, int(0.5 * df), int(60. * df))
+            #cft2 = recursive_sta_lta(st3_.data, int(2 * df), int(20. * df))
+                cft2 = classic_sta_lta(st3_.data, int(0.5 * df), int(60. * df))
             except:
                 continue
-            #cft = obspy.signal.trigger.classic_sta_lta(st_.data, int(2.5 * df), int(10. * df))
-            on_of = obspy.signal.trigger.trigger_onset(cft, 5, 1.2)
-            on_of1 = obspy.signal.trigger.trigger_onset(cft1, 5, 1.2)
-            on_of2 = obspy.signal.trigger.trigger_onset(cft2, 5, 1.2)
+            #cft = classic_sta_lta(st_.data, int(2.5 * df), int(10. * df))
+            on_of = trigger_onset(cft, 5, 1.2)
+            on_of1 = trigger_onset(cft1, 5, 1.2)
+            on_of2 = trigger_onset(cft2, 5, 1.2)
             if len(on_of) or len(on_of1) or len(on_of2):
                 print(t, t4, tr1.stats.station)
                 print(on_of, on_of1, on_of2)
@@ -105,9 +89,9 @@ def main(args):
                 times_csv["utc_end_timestamp"].append(t4.timestamp)
                 times_csv["stname"].append(filename1)
 
-                # mseed_files = filename1+lsplit3+lsplit4+lsplit5 + '.mseed'
-                # mseed_path = os.path.join(args.output, mseed_files)
-                # threechannels.write(mseed_path, format="mseed")
+               # mseed_files = filename1+lsplit3+lsplit4+lsplit5 + '.mseed'
+               # mseed_path = os.path.join(args.output, mseed_files)
+               # threechannels.write(mseed_path, format="mseed")
                 mseed_files = filename1 + '.mseed'
                 print(mseed_files)
                 if len(on_of):
@@ -133,6 +117,7 @@ def main(args):
                 minon = int(minon_of/100)
                 maxon = int(maxon_of/100)
                 print(minon_of, maxon_of)
+
                 if args.save_mseed:
                     mseed_dir = os.path.join(args.output, "mseed")
                     output_mseed = os.path.join(mseed_dir, mseed_files)
@@ -142,8 +127,8 @@ def main(args):
                     viz_dir = os.path.join(args.output, "viz")
                     if not os.path.exists(viz_dir):
                         os.makedirs(viz_dir)
-                    threechannels.slice(t+minon, t+maxon).plot(outfile=os.path.join(viz_dir,
-                                                                                    mseed_files.split(".mseed")[0]+'.png'))
+                    threechannels.slice(
+                        t+minon, t+maxon).plot(outfile=os.path.join(viz_dir, mseed_files.split(".mseed")[0]+'.png'))
         threechannels.clear()
         st1.clear()
 
