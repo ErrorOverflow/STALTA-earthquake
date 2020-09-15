@@ -31,9 +31,9 @@ def main(args):
         tr1 = st1[0]
         tr2 = st1[1]
         tr3 = st1[2]
-        p_pick, s_pick = ar_pick(
-            tr1, tr2, tr3, tr1.stats.sampling_rate, 1.0, 20.0, 1.0, 0.1, 4.0, 1.0, 2, 8, 0.1, 0.2)
-        return 0
+        # p_pick, s_pick = ar_pick(
+        #     tr1, tr2, tr3, tr1.stats.sampling_rate, 1.0, 20.0, 1.0, 0.1, 4.0, 1.0, 2, 8, 0.1, 0.2)
+        # return 0
         threechannels = st1
         msg = "%s %s %s" % (tr1.stats.station, str(
             tr1.stats.starttime), str(tr1.stats.endtime))
