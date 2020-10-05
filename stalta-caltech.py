@@ -75,11 +75,12 @@ for c, evi in enumerate(ev_list):
                borderaxespad=0., prop=legend_properties)
     plt.ylabel('Amplitude counts', fontsize=12)
     ax.set_xticklabels([])
-    plt.show()
+    #plt.show()
+    plt.savefig("./real_pic/"+str(c)+".png")
 
-    for at in dataset.attrs:
-        print(at, dataset.attrs[at])
+    # for at in dataset.attrs:
+    #     print(at, dataset.attrs[at])
 
-    inp = input("Press a key to plot the next waveform!")
-    if inp == "r":
-        continue
+    # inp = input("Press a key to plot the next waveform!")
+    # if inp == "r":
+    #     continue
