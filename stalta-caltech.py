@@ -3,15 +3,30 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 
-file_name = "/media/wml/新加卷/地震数据集/STEAD/chunk2/chunk2.hdf5"
-csv_file = "/media/wml/新加卷/地震数据集/STEAD/chunk2/chunk2.csv"
+
+def judge(x):
+    try:
+        tmp = float(x)
+        if tmp < 30:
+            return True
+        else:
+            return False
+    except ValueError:
+        return False
+
+
+file_name = "/media/wml/新加卷/flushSTEAD/merged.hdf5"
+csv_file = "/media/wml/新加卷/flushSTEAD/merged.csv"
 
 # reading the csv file into a dataframe:
 df = pd.read_csv(csv_file)
 print(f'total events in csv file: {len(df)}')
 # filterering the dataframe
+# df = df[(df.trace_category == 'earthquake_local') & (
+#     df.source_distance_km <= 20) & (df.source_magnitude > 1)  & (df.source_magnitude < 5)]
 df = df[(df.trace_category == 'earthquake_local') & (
-    df.source_distance_km <= 20) & (df.source_magnitude > 3)]
+    df.source_distance_km <= 300) & (df.source_magnitude < 5)]
+df = df.loc[df.source_depth_km.apply(lambda x: judge(x))]
 print(f'total events selected: {len(df)}')
 
 # making a list of trace names for the selected data
@@ -75,7 +90,7 @@ for c, evi in enumerate(ev_list):
                borderaxespad=0., prop=legend_properties)
     plt.ylabel('Amplitude counts', fontsize=12)
     ax.set_xticklabels([])
-    #plt.show()
+    # plt.show()
     plt.savefig("./real_pic/"+str(c)+".png")
 
     # for at in dataset.attrs:
