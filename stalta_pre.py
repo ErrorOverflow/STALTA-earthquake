@@ -4,6 +4,8 @@ import numpy as np
 import obspy
 from keras import backend as K
 import matplotlib.pyplot as plt
+import time
+import csv
 from obspy.signal.trigger import recursive_sta_lta, classic_sta_lta, trigger_onset, ar_pick
 
 config = {
@@ -14,6 +16,7 @@ config = {
     off_trigger = 0.7
 }
 
+
 def judge(x):
     try:
         tmp = float(x)
@@ -23,6 +26,7 @@ def judge(x):
             return False
     except ValueError:
         return False
+
 
 def f1(y_true, y_pred):
     def recall(y_true, y_pred):
@@ -46,18 +50,35 @@ def f1(y_true, y_pred):
     recall = recall(y_true, y_pred)
     return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
 
-def data_generator(hdfpath, csvpath):
-    df = pd.read_csv(csvpath)
-    print(f'total events in csv file: {len(df)}')
 
-    df = df[((df.trace_category == 'earthquake_local') & (
-        df.source_distance_km <= 300) & (df.source_magnitude < 5)) | (df.trace_category == 'noise')]
-    df = df.loc[df.source_depth_km.apply(lambda x: judge(x))]
-    print(f'total events selected: {len(df)}')
+class DataOperator():
+    def __init__(self, hdfpath, csvpath, outpath):
+        self.hdfpath = hdfpath
+        self.csvpath = csvpath
+        self.out_path = out_path
 
-    ev_list = df['trace_name'].to_list()
-    dtfl = h5py.File(hdfpath, 'r')
-    return dtfl, ev_list
+    def data_generator(self):
+        df = pd.read_csv(csvpath)
+        print(f'total events in csv file: {len(df)}')
+
+        df = df[((df.trace_category == 'earthquake_local') & (
+            df.source_distance_km <= 300) & (df.source_magnitude < 5)) | (df.trace_category == 'noise')]
+        df = df.loc[df.source_depth_km.apply(lambda x: judge(x))]
+        print(f'total events selected: {len(df)}')
+
+        ev_list = df['trace_name'].to_list()
+        dtfl = h5py.File(hdfpath, 'r')
+        return dtfl, ev_list
+
+    def data_writer(self):
+        csvfile = open(out_path, 'w')
+        output_writer = csv.writer(
+            csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        output_writer.writerow(['network_code', 'ID', 'earthquake_distance_km', 'snr_db', 'trace_name', 'trace_category', 'trace_start_time', 'source_magnitude', 'p_arrival_sample', 'p_status', 'p_weight', 's_arrival_sample', 's_status',
+                                's_weight', 'receiver_type', 'number_of_detections', 'detection_probability', 'detection_uncertainty', 'P_pick', 'P_probability', 'P_uncertainty', 'P_error', 'S_pick', 'S_probability', 'S_uncertainty', 'S_error'])
+        output_writer.writerow([])
+        csvfile.flush()
+
 
 def predict(dtfl, ev_list):
     for c, evi in enumerate(ev_list):
@@ -81,13 +102,13 @@ def predict(dtfl, ev_list):
         end_time = (E_end_time + N_end_time) / 2
 
         p_pick, s_pick = ar_pick(data[:, 0], data[:, 1], data[:, 2], 100,
-                                1.0, 20.0, 1.0, 0.1, 4.0, 1.0, 2, 8, 0.1, 0.2) * 100
+                                 1.0, 20.0, 1.0, 0.1, 4.0, 1.0, 2, 8, 0.1, 0.2) * 100
 
         y_true = [float(dataset.attrs['p_arrival_sample']),
-                float(dataset.attrs['s_arrival_sample']), float(dataset.attrs['coda_end_sample'][0][0])]
+                  float(dataset.attrs['s_arrival_sample']), float(dataset.attrs['coda_end_sample'][0][0])]
         y_pred = [p_pick, s_pick, end_time]
 
-        p_true = np.zeros(shape = (6000,))
+        p_true = np.zeros(shape=(6000,))
         p_true[p_pick-20:p_pick+21] = 1
 
         a = np.array(y_true)
@@ -96,7 +117,8 @@ def predict(dtfl, ev_list):
         break
     return p_pick, s_pick, end_time
 
-def show_result(p_pick, s_pick, end_time, is_save = False, is_show = False):
+
+def show_result(p_pick, s_pick, end_time, is_save=False, is_show=False):
     fig = plt.figure()
     ax = fig.add_subplot(311)
     plt.plot(data[:, 0], 'k')
@@ -112,7 +134,7 @@ def show_result(p_pick, s_pick, end_time, is_save = False, is_show = False):
     cl = plt.vlines(end_time, ymin,
                     ymax, color='aqua', linewidth=2, label='Coda End')
     plt.legend(handles=[pl, sl, cl], loc='upper right',
-            borderaxespad=0., prop=legend_properties)
+               borderaxespad=0., prop=legend_properties)
     plt.ylabel('Amplitude counts', fontsize=12)
     ax.set_xticklabels([])
 
@@ -129,7 +151,7 @@ def show_result(p_pick, s_pick, end_time, is_save = False, is_show = False):
     cl = plt.vlines(end_time, ymin,
                     ymax, color='aqua', linewidth=2, label='Coda End')
     plt.legend(handles=[pl, sl, cl], loc='upper right',
-            borderaxespad=0., prop=legend_properties)
+               borderaxespad=0., prop=legend_properties)
     plt.ylabel('Amplitude counts', fontsize=12)
     ax.set_xticklabels([])
 
@@ -146,7 +168,7 @@ def show_result(p_pick, s_pick, end_time, is_save = False, is_show = False):
     cl = plt.vlines(end_time, ymin,
                     ymax, color='aqua', linewidth=2, label='Coda End')
     plt.legend(handles=[pl, sl, cl], loc='upper right',
-            borderaxespad=0., prop=legend_properties)
+               borderaxespad=0., prop=legend_properties)
     plt.ylabel('Amplitude counts', fontsize=12)
     ax.set_xticklabels([])
     if is_show:
@@ -155,11 +177,15 @@ def show_result(p_pick, s_pick, end_time, is_save = False, is_show = False):
         plt.savefig("./predict_pic/merged/"+str(c)+".png")
     plt.close()
 
-def main(hdfpath, csvpath):
-    dtfl, ev_list = data_generator(hdfpath, csvpath)
+
+def main(hdfpath, csvpath, out_path):
+    data = DataOperator(hdfpath, csvpath, out_path)
+    dtfl, ev_list = data.data_generator()
+    p_pick, s_pick, end_time = predict(dtfl, ev_list)
 
 
 if __name__ == "__main__":
     file_name = "/media/wml/新加卷/flushSTEAD/merged.hdf5"
     csv_file = "/media/wml/新加卷/flushSTEAD/merged.csv"
-    main(file_name, csv_file)
+    out_path = "/media/wml/新加卷/flushSTEAD/result" + str(time.time()) + ".csv"
+    main(file_name, csv_file, out_path)
