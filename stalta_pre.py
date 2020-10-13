@@ -55,7 +55,8 @@ class DataOperator():
     def __init__(self, hdfpath, csvpath, outpath):
         self.hdfpath = hdfpath
         self.csvpath = csvpath
-        self.out_path = out_path
+        self.csvfile = open(out_path, 'w')
+        data_writer_initial()
 
     def data_generator(self):
         df = pd.read_csv(csvpath)
@@ -70,13 +71,18 @@ class DataOperator():
         dtfl = h5py.File(hdfpath, 'r')
         return dtfl, ev_list
 
-    def data_writer(self):
-        csvfile = open(out_path, 'w')
+    def data_writer_initial(self):
         output_writer = csv.writer(
             csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        output_writer.writerow(['network_code', 'ID', 'earthquake_distance_km', 'snr_db', 'trace_name', 'trace_category', 'trace_start_time', 'source_magnitude', 'p_arrival_sample', 'p_status', 'p_weight', 's_arrival_sample', 's_status',
-                                's_weight', 'receiver_type', 'number_of_detections', 'detection_probability', 'detection_uncertainty', 'P_pick', 'P_probability', 'P_uncertainty', 'P_error', 'S_pick', 'S_probability', 'S_uncertainty', 'S_error'])
-        output_writer.writerow([])
+        # output_writer.writerow(['network_code', 'ID', 'earthquake_distance_km', 'snr_db', 'trace_name', 'trace_category', 'trace_start_time', 'source_magnitude', 'p_arrival_sample', 'p_status', 'p_weight', 's_arrival_sample', 's_status',
+        #                         's_weight', 'receiver_type', 'number_of_detections', 'detection_probability', 'detection_uncertainty', 'P_pick', 'P_probability', 'P_uncertainty', 'P_error', 'S_pick', 'S_probability', 'S_uncertainty', 'S_error'])       
+        output_writer.writerow(['p_arrival_sample', 's_arrival_sample','conda_sample_time','P_pick', 'S_pick', 'coda_end_pick'])
+        csvfile.flush()
+    
+    def data_writer(self, p_pick, s_pick, end_time):
+        output_writer = csv.writer(
+            csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        output_writer.writerow([p_pick, s_pick, end_time])
         csvfile.flush()
 
 
@@ -104,17 +110,17 @@ def predict(dtfl, ev_list):
         p_pick, s_pick = ar_pick(data[:, 0], data[:, 1], data[:, 2], 100,
                                  1.0, 20.0, 1.0, 0.1, 4.0, 1.0, 2, 8, 0.1, 0.2) * 100
 
-        y_true = [float(dataset.attrs['p_arrival_sample']),
-                  float(dataset.attrs['s_arrival_sample']), float(dataset.attrs['coda_end_sample'][0][0])]
-        y_pred = [p_pick, s_pick, end_time]
+        # y_true = [float(dataset.attrs['p_arrival_sample']),
+        #           float(dataset.attrs['s_arrival_sample']), float(dataset.attrs['coda_end_sample'][0][0])]
+        # y_pred = [p_pick, s_pick, end_time]
 
-        p_true = np.zeros(shape=(6000,))
-        p_true[p_pick-20:p_pick+21] = 1
+        # p_true = np.zeros(shape=(6000,))
+        # p_true[p_pick-20:p_pick+21] = 1
 
-        a = np.array(y_true)
-        b = np.array(y_pred)
-        print(a * b)
-        break
+        # a = np.array(y_true)
+        # b = np.array(y_pred)
+        # print(a * b)
+        # break
     return p_pick, s_pick, end_time
 
 
@@ -179,9 +185,9 @@ def show_result(p_pick, s_pick, end_time, is_save=False, is_show=False):
 
 
 def main(hdfpath, csvpath, out_path):
-    data = DataOperator(hdfpath, csvpath, out_path)
-    dtfl, ev_list = data.data_generator()
-    p_pick, s_pick, end_time = predict(dtfl, ev_list)
+    dataOperator = DataOperator(hdfpath, csvpath, out_path)
+    dtfl, ev_list = dataOperator.data_generator()
+    p_pick, s_pick, end_time = predict(dtfl, ev_list, dataOperator)
 
 
 if __name__ == "__main__":
