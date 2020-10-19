@@ -11,7 +11,7 @@ config = {
     'scale': 6000,
     'sta_window': 300,
     'lta_window': 600,
-    'on_trigger': 1.2,
+    'on_trigger': 1.5,
     'off_trigger': 0.5
 }
 
@@ -19,47 +19,51 @@ config = {
 def judge(x):
     try:
         tmp = float(x)
-        if tmp < 30:
+        if tmp < 3000:
             return True
         else:
             return False
     except ValueError:
         return False
 
+
 class DataOperator():
     def __init__(self, hdfpath, csvpath, outpath):
         self.hdfpath = hdfpath
         self.csvpath = csvpath
-        self.csvfile = open(out_path, 'a')
+        self.outpath = out_path
 
     def data_generator(self):
         df = pd.read_csv(self.csvpath)
         print(f'total events in csv file: {len(df)}')
 
-        df = df[((df.trace_category == 'earthquake_local') & (
-            df.source_distance_km <= 300) & (df.source_magnitude < 5)) | (df.trace_category == 'noise')]
-        df = df.loc[df.source_depth_km.apply(lambda x: judge(x))]
-        print(f'total events selected: {len(df)}')
+        #df = df[(df.trace_category == 'earthquake_local')] | (df.trace_category == 'noise')& (df.source_distance_km <= 300) & (df.source_magnitude < 5)
+        #df = df.loc[df.source_depth_km.apply(lambda x: judge(x))]
+        #print(f'total events selected: {len(df)}')
 
         ev_list = df['trace_name'].to_list()
         dtfl = h5py.File(self.hdfpath, 'r')
         return dtfl, ev_list
 
     def data_writer_initial(self):
+        csvfile = open(self.outpath, 'w')
         output_writer = csv.writer(
-            self.csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         # output_writer.writerow(['network_code', 'ID', 'earthquake_distance_km', 'snr_db', 'trace_name', 'trace_category', 'trace_start_time', 'source_magnitude', 'p_arrival_sample', 'p_status', 'p_weight', 's_arrival_sample', 's_status',
         #                         's_weight', 'receiver_type', 'number_of_detections', 'detection_probability', 'detection_uncertainty', 'P_pick', 'P_probability', 'P_uncertainty', 'P_error', 'S_pick', 'S_probability', 'S_uncertainty', 'S_error'])
         output_writer.writerow(['trace_name', 'p_arrival_sample', 's_arrival_sample',
-                                'coda_end_sample', 'P_pick', 'S_pick', 'coda_end_pick'])
-        self.csvfile.flush()
+                                'coda_end_sample', 'P_pick', 'S_pick', 'coda_end_pick', 'trace_category','predict_category'])
+        csvfile.flush()
+        csvfile.close()
 
-    def data_writer(self, trace_name, p_arrival_sample, s_arrival_sample, conda_sample_time, p_pick, s_pick, end_time):
+    def data_writer(self, trace_name, p_arrival_sample, s_arrival_sample, conda_sample_time, p_pick, s_pick, end_time, trace_category, predict_category):
+        csvfile = open(self.outpath, 'a')
         output_writer = csv.writer(
-            self.csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         output_writer.writerow(
-            [trace_name, p_arrival_sample, s_arrival_sample, conda_sample_time, p_pick, s_pick, end_time])
-        self.csvfile.flush()
+            [trace_name, p_arrival_sample, s_arrival_sample, conda_sample_time, p_pick, s_pick, end_time, trace_category, predict_category])
+        csvfile.flush()
+        csvfile.close()
 
 
 def predict(dtfl, ev_list, dataOperator):
@@ -80,8 +84,15 @@ def predict(dtfl, ev_list, dataOperator):
             N_end_time, E_end_time = 6000, 6000
             if len(pre_E) == 0 and len(pre_N) == 0:
                 dataOperator.data_writer(dataset.attrs['trace_name'], dataset.attrs['p_arrival_sample'],
-                                         dataset.attrs['s_arrival_sample'], dataset.attrs['coda_end_sample'], -1, -1, -1)
+                                        dataset.attrs['s_arrival_sample'], dataset.attrs['coda_end_sample'], 
+                                        -1, -1, -1, dataset.attrs['trace_category'], "noise")
                 continue
+
+            if dataset.attrs['trace_category'] == 'noise':
+                dataOperator.data_writer(dataset.attrs['trace_name'], dataset.attrs['p_arrival_sample'],
+                                        dataset.attrs['s_arrival_sample'], dataset.attrs['coda_end_sample'], 
+                                        -1, -1, -1, dataset.attrs['trace_category'], "earthquake_local") 
+                continue           
 
             if len(pre_E):
                 E_end_time = pre_E[-1][1]
@@ -92,7 +103,7 @@ def predict(dtfl, ev_list, dataOperator):
             end_time = (E_end_time + N_end_time) / 2
 
             p_pick, s_pick = ar_pick(data[:, 0], data[:, 1], data[:, 2], 100,
-                                     1.0, 20.0, 1.0, 0.1, 4.0, 1.0, 2, 8, 0.1, 0.2)
+                                    1.0, 20.0, 1.0, 0.1, 4.0, 1.0, 2, 8, 0.1, 0.2)
 
             p_pick, s_pick = p_pick*100, s_pick*100
 
@@ -108,7 +119,8 @@ def predict(dtfl, ev_list, dataOperator):
             # print(a * b)
             # break
             dataOperator.data_writer(dataset.attrs['trace_name'], dataset.attrs['p_arrival_sample'],
-                                     dataset.attrs['s_arrival_sample'], dataset.attrs['coda_end_sample'], int(p_pick), int(s_pick), int(end_time))
+                                    dataset.attrs['s_arrival_sample'], dataset.attrs['coda_end_sample'], 
+                                    int(p_pick), int(s_pick), int(end_time), dataset.attrs['trace_category'], "earthquake_local")
         except:
             continue
     return
