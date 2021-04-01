@@ -2,6 +2,7 @@ import tensorflow as tf
 import os
 import numpy as np
 
+#from tensorflow ckpt bakup files
 model_dir = "/home/wangmulan/Code/PhaseNet-master/model/190703-214543"
 checkpoint_path = os.path.join(model_dir, "model_95.ckpt")
 reader = tf.compat.v1.train.NewCheckpointReader(checkpoint_path)
